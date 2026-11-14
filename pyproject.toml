@@ -1,0 +1,29 @@
+[project]
+name = "questdb-backup"
+version = "0.1.0"
+description = "QuestDB OSS checkpoint backup sidecar"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Kimmo Huoman" }]
+requires-python = ">=3.14"
+dependencies = [
+    "croniter>=7.0.0",
+    "psycopg[binary]>=3.3.9",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.22,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.5",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
