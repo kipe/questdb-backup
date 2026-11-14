@@ -140,3 +140,4 @@ python -m questdb_backup --once
 ## Releases
 
 Releases will be tagged `v*` on GitHub and pushed to `kipe/questdb-backup` for `linux/amd64` and `linux/arm64`.
+Tag `v0.1.0` publishes `0.1.0` and `latest`; Docker Hub login uses secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
