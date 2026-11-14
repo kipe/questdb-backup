@@ -14,7 +14,7 @@ QuestDB documents the statement and the open-source procedure:
 - [CHECKPOINT](https://questdb.com/docs/query/sql/checkpoint/)
 - [Backup](https://questdb.com/docs/operations/backup/)
 
-The image is [`kipe/questdb-backup`](https://hub.docker.com/r/kipe/questdb-backup) for `linux/amd64` and `linux/arm64`. [`0.1.0`](https://github.com/kipe/questdb-backup/releases/tag/v0.1.0) is the current release. `:latest` points at that same image.
+The image is [`kipe/questdb-backup`](https://hub.docker.com/r/kipe/questdb-backup) for `linux/amd64` and `linux/arm64`. `:latest` tracks the newest release.
 
 ## Docker Compose
 
@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
 
   questdb-backup:
-    image: kipe/questdb-backup:0.1.0
+    image: kipe/questdb-backup:latest
     restart: unless-stopped
     environment:
       QUESTDB_HOST: questdb
@@ -147,4 +147,4 @@ python -m questdb_backup --once
 
 ## Releases
 
-A GitHub tag `v*` publishes `kipe/questdb-backup:<version>` and moves `:latest`. `v0.1.0` is [`0.1.0`](https://hub.docker.com/r/kipe/questdb-backup/tags). The workflow logs in to Docker Hub with repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
+A GitHub tag `v*` publishes `kipe/questdb-backup:<version>` and moves `:latest`. The workflow logs in to Docker Hub with repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
