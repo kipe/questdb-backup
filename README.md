@@ -3,7 +3,7 @@
 Sidecar for QuestDB open source. On each run it will:
 
 1. Run `CHECKPOINT CREATE`.
-2. Stream `tar | zstd` of the whole QuestDB root while the checkpoint is held.
+2. Write a zstd-compressed tar of the whole QuestDB root while the checkpoint is held.
 3. Run `CHECKPOINT RELEASE` even if the copy fails.
 4. Rotate archives.
 

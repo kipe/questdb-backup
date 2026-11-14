@@ -16,10 +16,6 @@ RUN uv sync --frozen --no-dev --no-editable
 
 FROM python:3.14-slim-bookworm
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends tar zstd \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY --from=build /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:$PATH"

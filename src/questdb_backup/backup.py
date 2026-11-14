@@ -1,13 +1,14 @@
-"""One checkpoint backup. The SQL client, clock, and process runner are injected."""
+"""One checkpoint backup. The SQL client, clock, and archive writer are injected."""
 
 import logging
 import os
 import signal
 import stat
-import subprocess
+import tarfile
 import threading
 import time
 from collections.abc import Callable, Iterator
+from compression import zstd
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -25,13 +26,12 @@ SQL_CREATE = "CHECKPOINT CREATE"
 SQL_RELEASE = "CHECKPOINT RELEASE"
 
 # A stop during a SQL call is not aborted. The lockfile is written first, so the next
-# start can still release a checkpoint if the process is killed mid-request. Tar is the
-# long step: the signal handler stops those child processes, then the finally block
-# releases the checkpoint.
+# start can still release a checkpoint if the process is killed mid-request. The archive
+# checks the stop flag between files, then the finally block releases the checkpoint.
 
 
 class ArchiveError(Exception):
-    """tar or zstd failed. tar's status matters even when zstd exits 0."""
+    """The zstd tar could not be written."""
 
 
 class ProcessRunner(Protocol):
@@ -43,7 +43,7 @@ class ProcessRunner(Protocol):
 
 
 class StopController:
-    """Process-wide stop flag. The signal handler only sets a bool and stops child processes."""
+    """Process-wide stop flag. The signal handler only sets a bool and asks the archive to stop."""
 
     def __init__(self) -> None:
         self.signum: int | None = None
@@ -102,56 +102,49 @@ class StopController:
 
 
 class TarZstdRunner:
-    """GNU tar of one filesystem, piped to zstd. ``shell`` is never used."""
+    """Write a zstd-compressed tar with the stdlib. Other filesystems are skipped."""
 
     def __init__(self, level: int, threads: int) -> None:
         self._level = level
         self._threads = threads
-        self._procs: list[subprocess.Popen[bytes]] = []
+        self._stop = False
 
     def cancel(self) -> None:
-        for proc in list(self._procs):
-            if proc.poll() is None:
-                try:
-                    proc.terminate()
-                except OSError:
-                    pass
+        self._stop = True
 
     def stream(self, data_dir: Path, destination: Path) -> None:
-        zstd = subprocess.Popen(
-            ["zstd", "-q", "-f", f"-T{self._threads}", f"-{self._level}", "-o", os.fspath(destination)],
-            stdin=subprocess.PIPE,
-        )
-        try:
-            if zstd.stdin is None:
-                raise ArchiveError("zstd did not provide stdin")
-            tar = subprocess.Popen(
-                ["tar", "-C", os.fspath(data_dir), "--one-file-system", "-cf", "-", "."],
-                stdin=subprocess.DEVNULL,
-                stdout=zstd.stdin,
-            )
-        except Exception:
-            _reap(zstd)
-            raise
-        self._procs = [tar, zstd]
-        tar_rc = 1
-        zstd_rc = 1
-        try:
-            tar_rc = tar.wait()
-            try:
-                zstd.stdin.close()
-            except OSError:
-                pass
-            zstd_rc = zstd.wait()
-        finally:
-            _reap(tar)
-            _reap(zstd)
-            self._procs = []
-        # tar is checked first on purpose: a clean zstd exit must not hide a failed read.
-        if tar_rc != 0:
-            raise ArchiveError(f"tar exited {tar_rc}")
-        if zstd_rc != 0:
-            raise ArchiveError(f"zstd exited {zstd_rc}")
+        self._stop = False
+        root_dev = data_dir.stat().st_dev
+        options = {
+            zstd.CompressionParameter.compression_level: self._level,
+            zstd.CompressionParameter.nb_workers: self._threads,
+        }
+        with (
+            destination.open("wb") as raw,
+            zstd.ZstdFile(raw, mode="wb", options=options) as compressed,
+            tarfile.open(fileobj=compressed, mode="w|") as archive,
+        ):
+            self._add(archive, data_dir, ".", root_dev)
+
+    def _add(self, archive: tarfile.TarFile, path: Path, arcname: str, root_dev: int) -> None:
+        if self._stop:
+            raise ArchiveError("archive stopped")
+        info = archive.gettarinfo(os.fspath(path), arcname)
+        if info is None:
+            return
+        # A mount inside the data directory is a different device. Skip it, and do not walk it.
+        if arcname != "." and path.lstat().st_dev != root_dev:
+            return
+        if info.isreg():
+            with path.open("rb") as source:
+                archive.addfile(info, source)
+        else:
+            archive.addfile(info)
+        if not info.isdir() or info.issym():
+            return
+        for child in sorted(path.iterdir(), key=lambda item: item.name):
+            child_arc = child.name if arcname == "." else f"{arcname}/{child.name}"
+            self._add(archive, child, child_arc, root_dev)
 
 
 def run_backup(
@@ -352,12 +345,3 @@ def _format_started(started_at: datetime | None) -> str:
     if started_at is None:
         return "unknown"
     return started_at.isoformat()
-
-
-def _reap(proc: subprocess.Popen[bytes]) -> None:
-    if proc.poll() is None:
-        try:
-            proc.kill()
-        except OSError:
-            pass
-        proc.wait()
