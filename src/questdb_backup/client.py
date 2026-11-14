@@ -89,7 +89,7 @@ def parse_checkpoint_status(payload: object) -> tuple[bool, datetime | None]:
 
 
 class HttpSqlClient:
-    """POST ``/exec`` with optional basic auth."""
+    """GET ``/exec`` with optional basic auth. QuestDB OSS rejects POST."""
 
     def __init__(self, host: str, port: int, user: str = "", password: str = "", timeout: float = 60) -> None:
         split_host(host)
@@ -107,7 +107,7 @@ class HttpSqlClient:
 
     def _request(self, sql: str) -> object:
         url = exec_url(self._host, self._port, sql)
-        request = urllib.request.Request(url, data=b"", method="POST")
+        request = urllib.request.Request(url, method="GET")
         request.add_header("User-Agent", "questdb-backup")
         if self._user or self._password:
             token = base64.b64encode(f"{self._user}:{self._password}".encode()).decode("ascii")

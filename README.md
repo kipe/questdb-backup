@@ -53,6 +53,15 @@ volumes:
 
 Any variable omitted above uses the default in the table.
 
+[`docker-compose.example.yml`](docker-compose.example.yml) is a local end-to-end stack. It builds this Dockerfile, starts QuestDB 10.2.0 with HTTP auth, and takes a backup once QuestDB is healthy.
+
+```bash
+docker compose -f docker-compose.example.yml up --build
+docker compose -f docker-compose.example.yml exec questdb-backup ls -l /backups/last
+```
+
+The console is on port 9000 and the backup health port is 8080. The username and password in that file are `questdb`.
+
 ## Environment
 
 | Variable | Default | Purpose |
